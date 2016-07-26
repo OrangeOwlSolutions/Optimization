@@ -1,4 +1,4 @@
-include<stdio.h>
+#include<stdio.h>
 #include <math.h>
 
 #include "cublas_v2.h"
@@ -24,11 +24,11 @@ using namespace thrust::placeholders;
 /*******************************************/
 template<class T>
 __global__ void computePreconditioner(const int Ncols, const int * __restrict__ d_rowIndices_CSR, const int * __restrict__ d_colIndices_CSR, 
-	                                  const T * __restrict__ d_AValues_CSR, T * __restrict__ d_M_1)
+	                                  const T * __restrict__ d_AValues_CSR, T * __restrict__ d_M_1, const int BASE_INDEX)
 {
 	for (int i = threadIdx.x + blockIdx.x * blockDim.x; i<Ncols; i += gridDim.x * blockDim.x)
-		for (int k = d_rowIndices_CSR[i] - 1; k < d_rowIndices_CSR[i + 1] - 1; k++)
-			if (d_colIndices_CSR[k] == i + 1)
+		for (int k = d_rowIndices_CSR[i] - BASE_INDEX; k < d_rowIndices_CSR[i + 1] - BASE_INDEX; k++)
+			if (d_colIndices_CSR[k] == i + BASE_INDEX)
 				d_M_1[i] = (T)1 / d_AValues_CSR[k];
 }
 
@@ -38,13 +38,17 @@ __global__ void computePreconditioner(const int Ncols, const int * __restrict__ 
 template<class T>
 void precondConjugateGradientSparse(const int * __restrict__ d_rowIndices_CSR, const int Nn, const int * __restrict__ d_colIndices_CSR, 
 	                                const T * __restrict__ d_AValues_CSR, const int nnz, T * __restrict__ d_b, const int Ncols, 
-									T * __restrict__ d_x, int &iterations)
+									T * __restrict__ d_x, const int BASE_INDEX, int &iterations)
 {
 	cublasHandle_t handleBLAS;
 	cusparseHandle_t handleSPARSE;
 
 	cusparseMatDescr_t descrA = 0;
 
+	cusparseIndexBase_t CUSPARSE_INDEX_BASE;
+	if		(BASE_INDEX == 0) CUSPARSE_INDEX_BASE = CUSPARSE_INDEX_BASE_ZERO;
+	else                      CUSPARSE_INDEX_BASE = CUSPARSE_INDEX_BASE_ONE;
+	
 	cublasSafeCall(cublasCreate(&handleBLAS));
 	cusparseSafeCall(cusparseCreate(&handleSPARSE));
 
@@ -53,7 +57,7 @@ void precondConjugateGradientSparse(const int * __restrict__ d_rowIndices_CSR, c
 
 	// --- Descriptor for system matrix
 	cusparseSafeCall(cusparseCreateMatDescr(&descrA)); 
-	cusparseSafeCall(cusparseSetMatIndexBase(descrA, CUSPARSE_INDEX_BASE_ONE)); 
+	cusparseSafeCall(cusparseSetMatIndexBase(descrA, CUSPARSE_INDEX_BASE)); 
 
 	// Scalars on the host
 	T s0, snew, alpha;
@@ -66,7 +70,7 @@ void precondConjugateGradientSparse(const int * __restrict__ d_rowIndices_CSR, c
 	T *d_s;		gpuErrchk(cudaMalloc(&d_s,		sizeof(T) * Ncols));
 
 	// Create diagonal preconditioning matrix (J = 1 / diag(M)) 
-	computePreconditioner << <1, BLOCKSIZE >> >(Ncols, d_rowIndices_CSR, d_colIndices_CSR, d_AValues_CSR, d_M_1);
+	computePreconditioner << <1, BLOCKSIZE >> >(Ncols, d_rowIndices_CSR, d_colIndices_CSR, d_AValues_CSR, d_M_1, BASE_INDEX);
 
 	// --- Initialise result vector to zero (ATTENZIONE: QUI SI ASSUME CHE X0 = 0, MA NON DOVREBBE ESSERE NECESSARIAMENTE COSì
 	cudaMemset(d_x, 0, Ncols * sizeof(T));
@@ -136,9 +140,9 @@ void precondConjugateGradientSparse(const int * __restrict__ d_rowIndices_CSR, c
 
 template void precondConjugateGradientSparse<float>(const int * __restrict__, const int, const int * __restrict__,
 	const float * __restrict__, const int, float * __restrict__, const int,
-	float * __restrict__, int &);
+	float * __restrict__, const int, int &);
 
 template void precondConjugateGradientSparse<double>(const int * __restrict__, const int, const int * __restrict__,
 	const double * __restrict__, const int, double * __restrict__, const int,
-	double * __restrict__, int &);
+	double * __restrict__, const int, int &);
 
