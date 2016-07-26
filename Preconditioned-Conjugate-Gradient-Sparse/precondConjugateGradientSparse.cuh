@@ -3,6 +3,6 @@
 
 template<class T>
 void precondConjugateGradientSparse(const int * __restrict__, const int, const int * __restrict__, const T * __restrict__, const int,
-	T * __restrict__, const int, T * __restrict__, int &);
+	T * __restrict__, const int, T * __restrict__, const int, int &);
 
 #endif
