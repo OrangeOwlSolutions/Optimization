@@ -65,7 +65,7 @@ int main() {
 	REAL_TYPE *d_x;				 gpuErrchk(cudaMalloc((void **)&d_x, sizeof(REAL_TYPE) * Ncols));
 
 	int iterations;
-	precondConjugateGradientSparse(d_rowIndices_CSR, Nrows + 1, d_colIndices_CSR, d_AValues_CSR, nnz, d_b, Nrows, d_x, iterations);
+	precondConjugateGradientSparse(d_rowIndices_CSR, Nrows + 1, d_colIndices_CSR, d_AValues_CSR, nnz, d_b, Nrows, d_x, 1, iterations);
 	printf("Iterations: %d \n", iterations);
 
 	// --- Copy result back to the host
